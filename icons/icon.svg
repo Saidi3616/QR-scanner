@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App-ikon: smaragdgrønne scanner-hjørner om et stiliseret QR-mærke på sort -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="75%">
+      <stop offset="0" stop-color="#1a1d1c"/>
+      <stop offset="1" stop-color="#000"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g id="mark">
+    <g fill="none" stroke="#10B981" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M104 180v-36a40 40 0 0 1 40-40h36"/>
+      <path d="M332 104h36a40 40 0 0 1 40 40v36"/>
+      <path d="M408 332v36a40 40 0 0 1-40 40h-36"/>
+      <path d="M180 408h-36a40 40 0 0 1-40-40v-36"/>
+    </g>
+    <g fill="#fff">
+      <path fill-rule="evenodd" d="M168 168h64v64h-64zM184 184v32h32v-32z"/>
+      <rect x="192" y="192" width="16" height="16"/>
+      <path fill-rule="evenodd" d="M280 168h64v64h-64zM296 184v32h32v-32z"/>
+      <rect x="304" y="192" width="16" height="16"/>
+      <path fill-rule="evenodd" d="M168 280h64v64h-64zM184 296v32h32v-32z"/>
+      <rect x="192" y="304" width="16" height="16"/>
+      <rect x="280" y="280" width="24" height="24" rx="4"/>
+      <rect x="320" y="280" width="24" height="24" rx="4"/>
+      <rect x="300" y="300" width="24" height="24" rx="4"/>
+      <rect x="280" y="320" width="24" height="24" rx="4"/>
+      <rect x="320" y="320" width="24" height="24" rx="4"/>
+    </g>
+  </g>
+</svg>
