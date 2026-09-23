@@ -141,7 +141,8 @@
     #pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error); flex: none; display: none; }
     #pill.is-error .dot { display: block; }
     body.no-camera #pill:not(.is-error),
-    body.result-open #pill { opacity: 0; }
+    body.result-open #pill,
+    body.create-open #pill { opacity: 0; }
 
     /* --- Ikonknapper nederst --- */
     #controls {
@@ -268,6 +269,119 @@
 
     /* Historik-sheet */
     #history-sheet { max-height: 80vh; max-height: 80dvh; display: flex; flex-direction: column; }
+
+    /* --- Tilstandsvælger Scan / Opret (som i kamera-apps) --- */
+    #mode-switch {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--safe-bottom) + 34px + 58px + 22px);
+      transform: translateX(-50%);
+      display: flex;
+      padding: 4px;
+      border-radius: 999px;
+      border: 1px solid var(--hairline);
+    }
+    body.no-camera #mode-switch { display: none; }
+    #mode-indicator {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      left: 4px;
+      width: calc(50% - 4px);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      transition: transform var(--t) var(--ease-out);
+    }
+    body.create-open #mode-indicator { transform: translateX(100%); }
+    .mode-btn {
+      position: relative;
+      min-width: 84px;
+      min-height: 44px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--fg-2);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color var(--t) var(--ease-out);
+    }
+    body:not(.create-open) #mode-scan,
+    body.create-open #mode-create { color: var(--fg); }
+
+    /* --- Opret QR-kode --- */
+    #create-sheet { max-height: 92vh; max-height: 92dvh; display: flex; flex-direction: column; overflow-y: auto; }
+    #create-input {
+      width: 100%;
+      min-height: 84px;
+      max-height: 22vh;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--hairline);
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--fg);
+      font: inherit;
+      font-size: 16px;            /* mindst 16px, ellers zoomer iOS ind ved fokus */
+      line-height: 1.4;
+      resize: none;
+      outline: none;
+      transition: border-color var(--t) var(--ease-out);
+    }
+    #create-input::placeholder { color: var(--fg-3); }
+    #create-input:focus { border-color: rgba(16, 185, 129, 0.7); }
+    .create-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 8px 2px 0;
+      font-size: 13px;
+      color: var(--fg-3);
+    }
+    #create-kind { display: flex; align-items: center; gap: 6px; }
+    #create-kind svg.icon { width: 14px; height: 14px; }
+    #create-count.over { color: var(--error); }
+    #qr-card {
+      position: relative;
+      width: min(62vw, 30vh, 260px);
+      aspect-ratio: 1;
+      margin: 20px auto 0;
+      border-radius: 22px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      flex: none;
+      transition: background-color var(--t) var(--ease-out);
+    }
+    #qr-card.empty { background: rgba(255, 255, 255, 0.06); }
+    #qr-canvas {
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      opacity: 1;
+      transition: opacity 200ms var(--ease-out);
+    }
+    #qr-card.empty #qr-canvas { opacity: 0; }
+    #qr-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--fg-3);
+      opacity: 0;
+      transition: opacity 200ms var(--ease-out);
+    }
+    #qr-placeholder svg.icon { width: 36px; height: 36px; stroke-width: 1.5; }
+    #qr-card.empty #qr-placeholder { opacity: 1; }
+    #qr-card.too-long #qr-placeholder { color: var(--error); }
+    #create-sheet .btn:disabled { opacity: 0.35; cursor: default; }
     .sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
     .sheet-header h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
     .sheet-header .header-actions { display: flex; align-items: center; gap: 4px; }
@@ -363,7 +477,7 @@
     #empty-state h1 { margin: 0 0 10px; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
     #empty-text { margin: 0 0 32px; max-width: 320px; font-size: 16px; line-height: 1.45; color: var(--fg-2); }
     #empty-state .btn { width: 100%; max-width: 320px; }
-    #empty-state .text-btn { margin-top: 12px; }
+    #empty-state .text-btn { margin-top: 8px; }
 
     /* Små telefoner (fx iPhone SE): lidt mindre tekst og luft i kortet */
     @media (max-width: 360px), (max-height: 640px) {
@@ -392,6 +506,9 @@
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
     <symbol id="i-text" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+    <symbol id="i-qr" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></symbol>
   </svg>
 
   <!-- playsinline + muted: kræves af iOS Safari for at afspille inline uden fuldskærm -->
@@ -404,6 +521,12 @@
   </div>
 
   <div id="pill" class="glass" role="status" aria-live="polite"><span class="dot"></span><span id="pill-text">Starter kamera…</span></div>
+
+  <div id="mode-switch" class="glass" role="tablist">
+    <div id="mode-indicator"></div>
+    <button id="mode-scan" class="mode-btn" role="tab">Scan</button>
+    <button id="mode-create" class="mode-btn" role="tab">Opret</button>
+  </div>
 
   <div id="controls">
     <button id="torch-btn" class="round-btn glass" aria-label="Lommelygte" aria-pressed="false">
@@ -427,6 +550,7 @@
     <p id="empty-text">Giv adgang til kameraet for at scanne QR-koder. Billedet forlader aldrig din enhed.</p>
     <button id="permission-btn" class="btn primary">Giv adgang til kamera</button>
     <button id="empty-gallery-btn" class="text-btn">Vælg billede i stedet</button>
+    <button id="empty-create-btn" class="text-btn">Opret en QR-kode</button>
   </div>
 
   <!-- Resultatkort -->
@@ -458,11 +582,37 @@
     <ul id="history-list"></ul>
   </section>
 
+  <!-- Opret QR-kode -->
+  <section id="create-sheet" class="sheet" aria-label="Opret QR-kode" inert>
+    <div class="grabber"></div>
+    <div class="sheet-header">
+      <h2>Opret QR-kode</h2>
+      <button id="close-create-btn" class="icon-btn" aria-label="Luk"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <textarea id="create-input" rows="3" placeholder="Skriv tekst eller indsæt et link" aria-label="Tekst eller link"></textarea>
+    <div class="create-meta">
+      <span id="create-kind"></span>
+      <span id="create-count"></span>
+    </div>
+    <div id="qr-card" class="empty">
+      <canvas id="qr-canvas" aria-label="Genereret QR-kode"></canvas>
+      <div id="qr-placeholder"><svg class="icon"><use href="#i-qr"/></svg><span id="qr-placeholder-text">Din QR-kode vises her</span></div>
+    </div>
+    <div class="actions">
+      <div class="actions-row">
+        <button id="share-btn" class="btn primary" disabled><svg class="icon"><use href="#i-share"/></svg>Del</button>
+        <button id="save-btn" class="btn secondary" disabled><svg class="icon"><use id="save-icon" href="#i-download"/></svg><span id="save-label">Gem billede</span></button>
+      </div>
+    </div>
+  </section>
+
   <!-- jsQR 1.4.0 (Apache-2.0), lokal kopi — se lib/jsQR.LICENSE -->
   <script src="lib/jsQR.js"></script>
+  <!-- qrcode-generator 2.0.4 (MIT, © Kazuhiko Arase), lokal kopi — licens i filens top -->
+  <script src="lib/qrcode-generator.js"></script>
   <script>
     // Opdateres ved hver push, så man kan se om man har den nyeste version
-    const APP_VERSION = 'v0.5 · trin 5 (design)';
+    const APP_VERSION = 'v0.6 · trin 6 (opret QR)';
 
     const $ = id => document.getElementById(id);
     const video = $('video');
@@ -729,7 +879,7 @@
       setPill(INSTRUCTION);
       missCount = 0;
       // Kort pause, så overgangen når at køre før næste scanning
-      setTimeout(() => { paused = false; }, 300);
+      resumeIfIdle();
     }
 
     $('open-btn').addEventListener('click', () => {
@@ -966,15 +1116,179 @@
       renderHistory();
     });
 
+    // Scanningen genoptages først når intet kort er åbent
+    function resumeIfIdle() {
+      const anyOpen = document.querySelector('.sheet.open');
+      if (!anyOpen) setTimeout(() => { if (!document.querySelector('.sheet.open')) paused = false; }, 300);
+    }
+
     $('history-btn').addEventListener('click', () => {
       paused = true;
       disarmClear();
       renderHistory();
+      closeCreate();
       openSheet(historySheet);
     });
     $('close-history-btn').addEventListener('click', () => {
       closeSheet(historySheet);
-      if (!resultSheet.classList.contains('open')) setTimeout(() => { paused = false; }, 300);
+      resumeIfIdle();
+    });
+
+    // --- Opret QR-kode ---
+    const createSheet = $('create-sheet');
+    const createInput = $('create-input');
+    const qrCard = $('qr-card');
+    const qrCanvas = $('qr-canvas');
+    const QR_MAX_BYTES = 2331;       // maks. bytes ved fejlkorrektion 'M' (målt mod biblioteket)
+    const QR_EXPORT_PX = 1024;       // ca. størrelse på det gemte/delte billede
+    let qrFile = null;               // færdig PNG, klar til deling (se kommentar i renderQr)
+    let qrRenderTimer = null;
+
+    // Standard i qrcode-generator er charCode & 0xff, som ødelægger fx emoji —
+    // biblioteket har en UTF-8-funktion, men den skal slås til eksplicit.
+    qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+
+    // Web Share med filer: Chrome Android, iOS/macOS Safari 14+, Chrome på Windows/ChromeOS.
+    // Ikke Firefox — der vises kun "Gem billede".
+    const canShareFiles = (() => {
+      try {
+        return !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'test.png', { type: 'image/png' })] }));
+      } catch { return false; }
+    })();
+    $('share-btn').hidden = !canShareFiles;
+    $('save-btn').className = 'btn ' + (canShareFiles ? 'secondary' : 'primary');
+
+    function utf8Length(text) { return new TextEncoder().encode(text).length; }
+
+    function setQrEmpty(message, tooLong = false) {
+      qrCard.classList.add('empty');
+      qrCard.classList.toggle('too-long', tooLong);
+      $('qr-placeholder-text').textContent = message;
+      qrFile = null;
+      $('share-btn').disabled = true;
+      $('save-btn').disabled = true;
+    }
+
+    function renderQr() {
+      const text = createInput.value;
+      const bytes = utf8Length(text);
+      const url = text.trim() ? toSafeUrl(text) : null;
+
+      $('create-kind').replaceChildren();
+      if (text.trim()) $('create-kind').append(icon(url ? 'i-link' : 'i-text'), url ? 'Link' : 'Tekst');
+      const countEl = $('create-count');
+      countEl.textContent = bytes > QR_MAX_BYTES * 0.8 ? bytes + ' / ' + QR_MAX_BYTES : '';
+      countEl.classList.toggle('over', bytes > QR_MAX_BYTES);
+
+      if (!text.trim()) return setQrEmpty('Din QR-kode vises her');
+      if (bytes > QR_MAX_BYTES) return setQrEmpty('Teksten er for lang til en QR-kode', true);
+
+      let qr;
+      try {
+        qr = qrcode(0, 'M');           // 0 = vælg størrelse automatisk
+        qr.addData(text);
+        qr.make();
+      } catch (err) {
+        // Biblioteket kaster en tekststreng (ikke Error) ved "code length overflow"
+        console.warn('[QR-scanner] Kunne ikke generere QR-kode', err);
+        return setQrEmpty('Teksten er for lang til en QR-kode', true);
+      }
+
+      // Tegn med hele pixels pr. modul og 4 modulers hvid kant (kræves af QR-standarden)
+      const n = qr.getModuleCount();
+      const margin = 4;
+      const cell = Math.max(4, Math.floor(QR_EXPORT_PX / (n + margin * 2)));
+      const size = (n + margin * 2) * cell;
+      qrCanvas.width = qrCanvas.height = size;
+      const ctx = qrCanvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#000';
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (qr.isDark(r, c)) ctx.fillRect((c + margin) * cell, (r + margin) * cell, cell, cell);
+        }
+      }
+      qrCard.classList.remove('empty', 'too-long');
+
+      // PNG'en laves med det samme (ikke først ved tryk), fordi Safari kræver at
+      // navigator.share() kaldes direkte i trykket — uden asynkron ventetid først.
+      const renderedText = text;
+      qrCanvas.toBlob(blob => {
+        if (!blob || createInput.value !== renderedText) return;
+        qrFile = new File([blob], 'qr-kode.png', { type: 'image/png' });
+        $('share-btn').disabled = false;
+        $('save-btn').disabled = false;
+      }, 'image/png');
+    }
+
+    createInput.addEventListener('input', () => {
+      $('share-btn').disabled = true;
+      $('save-btn').disabled = true;
+      clearTimeout(qrRenderTimer);
+      qrRenderTimer = setTimeout(renderQr, 150);
+    });
+
+    function openCreate() {
+      paused = true;
+      closeSheet(historySheet);
+      if (resultSheet.classList.contains('open')) rescan();
+      paused = true;
+      document.body.classList.add('create-open');
+      openSheet(createSheet);
+      createInput.focus({ preventScroll: true });   // direkte i trykket, så iOS viser tastaturet
+    }
+    function closeCreate() {
+      if (!createSheet.classList.contains('open')) return;
+      createInput.blur();
+      closeSheet(createSheet);
+      document.body.classList.remove('create-open');
+      resumeIfIdle();
+    }
+
+    $('mode-create').addEventListener('click', openCreate);
+    $('mode-scan').addEventListener('click', closeCreate);
+    $('close-create-btn').addEventListener('click', closeCreate);
+    $('empty-create-btn').addEventListener('click', openCreate);
+
+    $('share-btn').addEventListener('click', async () => {
+      if (!qrFile) return;
+      const text = createInput.value.trim();
+      try {
+        await navigator.share({ files: [qrFile], title: 'QR-kode', text: text.length <= 200 ? text : undefined });
+      } catch (err) {
+        if (err.name !== 'AbortError') {   // AbortError = brugeren lukkede delingsmenuen
+          console.error('[QR-scanner] Deling fejlede', err);
+          flashMessage('Kunne ikke dele billedet');
+        }
+      }
+    });
+
+    let saveTimer = null;
+    $('save-btn').addEventListener('click', () => {
+      if (!qrFile) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(qrFile);
+      a.download = 'qr-kode.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      $('save-label').textContent = 'Gemt';
+      $('save-icon').setAttribute('href', '#i-check');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        $('save-label').textContent = 'Gem billede';
+        $('save-icon').setAttribute('href', '#i-download');
+      }, 1800);
+    });
+
+    // Escape lukker det øverste kort (praktisk på computer)
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (createSheet.classList.contains('open')) closeCreate();
+      else if (historySheet.classList.contains('open')) $('close-history-btn').click();
+      else if (resultSheet.classList.contains('open')) rescan();
     });
 
     $('permission-btn').addEventListener('click', startCamera);
