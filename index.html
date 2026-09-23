@@ -74,6 +74,10 @@
       word-break: break-word;
       white-space: pre-wrap;
     }
+    #result-text a {
+      color: var(--accent);
+      text-decoration: underline;
+    }
     button {
       font-size: 1rem;
       padding: 12px 24px;
@@ -113,7 +117,7 @@
   <script src="lib/jsQR.js"></script>
   <script>
     // Opdateres ved hver push, så man kan se om man har den nyeste version
-    const APP_VERSION = 'v0.2 · trin 2 (QR-genkendelse)';
+    const APP_VERSION = 'v0.3 · trin 3 (links)';
 
     const video = document.getElementById('video');
     const overlay = document.getElementById('overlay');
@@ -122,6 +126,7 @@
     const statusEl = document.getElementById('status');
     const resultEl = document.getElementById('result');
     const resultText = document.getElementById('result-text');
+    const resultLabel = document.getElementById('result-label');
 
     // Skjult lærred som kamerabilledet tegnes på, så pixels kan gives til jsQR
     const scanCanvas = document.createElement('canvas');
@@ -251,12 +256,47 @@
       if (text === lastResult) return;   // samme kode som før — undgå gentagne opdateringer/vibrationer
       lastResult = text;
 
-      resultText.textContent = text;     // textContent, så indholdet aldrig tolkes som HTML
+      renderResult(text);
       resultEl.style.display = 'block';
       resultEl.classList.add('found');
       setStatus('QR-kode fundet!');
       if (navigator.vibrate) navigator.vibrate(100);
       console.log('[QR-scanner] QR-kode afkodet:', text);
+    }
+
+    // Returnerer en sikker http(s)-adresse hvis HELE indholdet er et link, ellers null.
+    // new URL() accepterer også fx "javascript:alert(1)", så protokollen tjekkes eksplicit —
+    // ellers kunne en ondsindet QR-kode køre kode når man klikker på linket.
+    function toSafeUrl(text) {
+      let candidate = text.trim();
+      if (/\s/.test(candidate)) return null;                  // mellemrum = tekst med et link i, ikke et link
+      if (/^www\./i.test(candidate)) candidate = 'https://' + candidate;   // "www.dr.dk" uden protokol
+      try {
+        const url = new URL(candidate);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+        return url.href;
+      } catch {
+        return null;                                          // kunne ikke tolkes som adresse
+      }
+    }
+
+    // Byg DOM-elementer i stedet for innerHTML, så indholdet aldrig tolkes som HTML
+    function renderResult(text) {
+      resultText.replaceChildren();
+      const url = toSafeUrl(text);
+
+      if (url) {
+        resultLabel.textContent = 'Link (åbner i ny fane):';
+        const a = document.createElement('a');
+        a.href = url;
+        a.textContent = text.trim();   // vis adressen som den stod i koden (ikke %-kodet)
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        resultText.appendChild(a);
+      } else {
+        resultLabel.textContent = 'Tekst:';
+        resultText.textContent = text;
+      }
     }
 
     startBtn.addEventListener('click', startCamera);
