@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>QR-scanner</title>
+  <style>
+    :root {
+      --bg: #111;
+      --fg: #eee;
+      --muted: #999;
+      --accent: #2e8bff;
+      --error: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 1.4rem; }
+    #camera-box {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      aspect-ratio: 3 / 4;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+    #placeholder { color: var(--muted); padding: 16px; text-align: center; }
+    button {
+      font-size: 1rem;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #status { min-height: 1.5em; text-align: center; max-width: 480px; }
+    #status.error { color: var(--error); }
+    #version { margin-top: auto; font-size: 0.75rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>QR-scanner</h1>
+
+  <div id="camera-box">
+    <!-- playsinline + muted: kræves af iOS Safari for at afspille inline uden fuldskærm -->
+    <video id="video" autoplay playsinline muted></video>
+    <div id="placeholder">Kameraet er ikke startet endnu.</div>
+  </div>
+
+  <button id="start-btn">Start kamera</button>
+  <div id="status"></div>
+
+  <div id="version"></div>
+
+  <script>
+    // Opdateres ved hver push, så man kan se om man har den nyeste version
+    const APP_VERSION = 'v0.1 · trin 1 (kamera)';
+
+    const video = document.getElementById('video');
+    const placeholder = document.getElementById('placeholder');
+    const startBtn = document.getElementById('start-btn');
+    const statusEl = document.getElementById('status');
+
+    document.getElementById('version').textContent = APP_VERSION;
+    console.log('[QR-scanner]', APP_VERSION);
+
+    function setStatus(text, isError = false) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle('error', isError);
+    }
+
+    // Oversæt de fejl getUserMedia kan kaste til en forståelig besked
+    function describeError(err) {
+      switch (err.name) {
+        case 'NotAllowedError':
+          return 'Adgang til kameraet blev afvist. Tillad kamera i browserens indstillinger for siden og prøv igen.';
+        case 'NotFoundError':
+          return 'Der blev ikke fundet noget kamera på enheden.';
+        case 'NotReadableError':
+          return 'Kameraet kunne ikke åbnes — det bruges måske af en anden app.';
+        case 'OverconstrainedError':
+          return 'Kameraet understøtter ikke de ønskede indstillinger.';
+        case 'SecurityError':
+          return 'Kamera-adgang er blokeret af sikkerhedsindstillinger (kræver https).';
+        default:
+          return 'Ukendt fejl: ' + err.name + ' — ' + err.message;
+      }
+    }
+
+    async function startCamera() {
+      // navigator.mediaDevices findes kun i en "secure context" (https eller localhost)
+      if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus('Kameraet kræver at siden åbnes via https (det live link), ikke som lokal fil.', true);
+        return;
+      }
+
+      startBtn.disabled = true;
+      setStatus('Beder om adgang til kameraet…');
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          // "ideal" = foretræk bagkameraet, men fald tilbage til et andet kamera (fx på en PC)
+          video: { facingMode: { ideal: 'environment' } }
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+        video.style.display = 'block';
+        placeholder.style.display = 'none';
+        startBtn.style.display = 'none';
+
+        const settings = stream.getVideoTracks()[0].getSettings();
+        setStatus('Kameraet kører (' + settings.width + '×' + settings.height + ').');
+        console.log('[QR-scanner] Kamera startet', settings);
+      } catch (err) {
+        console.error('[QR-scanner] Kamerafejl', err);
+        setStatus(describeError(err), true);
+        startBtn.disabled = false;
+      }
+    }
+
+    startBtn.addEventListener('click', startCamera);
+  </script>
+</body>
+</html>
