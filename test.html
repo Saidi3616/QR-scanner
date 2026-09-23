@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR-scanner · testkoder</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <style>
+    body { margin: 0; padding: 32px 24px; background: #f4f4f5; color: #111; font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif; }
+    h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+    p { margin: 0 0 28px; color: #555; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    .card { background: #fff; border-radius: 18px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .card svg { width: 100%; height: auto; display: block; }
+    .num { font-size: 13px; font-weight: 700; color: #10B981; }
+    .title { font-weight: 600; margin: 2px 0 4px; }
+    .expect { font-size: 14px; color: #555; }
+    code { font-size: 12px; word-break: break-all; color: #333; }
+  </style>
+</head>
+<body>
+  <h1>Testkoder til QR-scanneren</h1>
+  <p>Åbn denne side på computeren og scan koderne med appen på telefonen.</p>
+  <div class="grid" id="grid"></div>
+
+  <script src="lib/qrcode-generator.js"></script>
+  <script>
+    // Samme UTF-8-indstilling som i appen (standarden ødelægger fx emoji)
+    qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+
+    const CASES = [
+      ['Link', 'https://www.dr.dk/nyheder', 'Kort med "LINK", overskrift dr.dk og en grøn Åbn-knap.'],
+      ['Link uden https', 'www.wikipedia.org', 'Vises som link; Åbn åbner https://www.wikipedia.org.'],
+      ['Tekst med æøå og emoji', 'Hej fra testsiden — æøå ÆØÅ 🙂', 'Kort med "TEKST", teksten præcis som her, ingen Åbn-knap.'],
+      ['Tekst med link i', 'Se mere på https://example.com', 'Vises som tekst (ikke link), fordi hele indholdet ikke er ét link.'],
+      ['Ondsindet kode', 'javascript:alert(1)', 'Skal vises som TEKST — aldrig som klikbart link.'],
+      ['Lang tekst', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(4).trim(), 'Teksten kan rulles i kortet; knapperne er stadig synlige.']
+    ];
+
+    const grid = document.getElementById('grid');
+    CASES.forEach(([title, data, expect], i) => {
+      const qr = qrcode(0, 'M');
+      qr.addData(data);
+      qr.make();
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = qr.createSvgTag(6, 24);   // SVG genereret af biblioteket ud fra faste teststrenge
+      const meta = document.createElement('div');
+      meta.innerHTML = '<div class="num"></div><div class="title"></div><div class="expect"></div><code></code>';
+      meta.querySelector('.num').textContent = 'Test ' + (i + 1);
+      meta.querySelector('.title').textContent = title;
+      meta.querySelector('.expect').textContent = 'Forventet: ' + expect;
+      meta.querySelector('code').textContent = data.length > 60 ? data.slice(0, 60) + '…' : data;
+      card.appendChild(meta);
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>
