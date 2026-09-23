@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>QR-scanner</title>
+  <!-- tomt favicon, så browseren ikke logger en 404 i konsollen -->
+  <link rel="icon" href="data:,">
   <style>
     :root {
       --bg: #111;
@@ -11,6 +13,7 @@
       --muted: #999;
       --accent: #2e8bff;
       --error: #ff6b6b;
+      --success: #3ddc84;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -46,7 +49,31 @@
       object-fit: cover;
       display: none;
     }
+    /* Overlay-lærred oven på videoen, hvor den fundne QR-kode markeres */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
     #placeholder { color: var(--muted); padding: 16px; text-align: center; }
+    #result {
+      width: 100%;
+      max-width: 480px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      background: #1e1e1e;
+      border: 2px solid #333;
+      display: none;
+    }
+    #result.found { border-color: var(--success); }
+    #result-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+    #result-text {
+      font-size: 1.05rem;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
     button {
       font-size: 1rem;
       padding: 12px 24px;
@@ -68,22 +95,43 @@
   <div id="camera-box">
     <!-- playsinline + muted: kræves af iOS Safari for at afspille inline uden fuldskærm -->
     <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
     <div id="placeholder">Kameraet er ikke startet endnu.</div>
   </div>
 
   <button id="start-btn">Start kamera</button>
   <div id="status"></div>
 
+  <div id="result">
+    <div id="result-label">Afkodet tekst:</div>
+    <div id="result-text"></div>
+  </div>
+
   <div id="version"></div>
 
+  <!-- jsQR 1.4.0 (Apache-2.0), lokal kopi — se lib/jsQR.LICENSE -->
+  <script src="lib/jsQR.js"></script>
   <script>
     // Opdateres ved hver push, så man kan se om man har den nyeste version
-    const APP_VERSION = 'v0.1 · trin 1 (kamera)';
+    const APP_VERSION = 'v0.2 · trin 2 (QR-genkendelse)';
 
     const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
     const placeholder = document.getElementById('placeholder');
     const startBtn = document.getElementById('start-btn');
     const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const resultText = document.getElementById('result-text');
+
+    // Skjult lærred som kamerabilledet tegnes på, så pixels kan gives til jsQR
+    const scanCanvas = document.createElement('canvas');
+    const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+    const overlayCtx = overlay.getContext('2d');
+
+    const SCAN_INTERVAL_MS = 150;   // højst ~6-7 scanninger i sekundet, sparer batteri
+    const MAX_SCAN_SIZE = 800;      // nedskalér store billeder — hurtigere, stadig skarpt nok
+    let lastScanTime = 0;
+    let lastResult = null;
 
     document.getElementById('version').textContent = APP_VERSION;
     console.log('[QR-scanner]', APP_VERSION);
@@ -136,13 +184,79 @@
         startBtn.style.display = 'none';
 
         const settings = stream.getVideoTracks()[0].getSettings();
-        setStatus('Kameraet kører (' + settings.width + '×' + settings.height + ').');
+        setStatus('Peg kameraet mod en QR-kode…');
         console.log('[QR-scanner] Kamera startet', settings);
+
+        requestAnimationFrame(scanLoop);
       } catch (err) {
         console.error('[QR-scanner] Kamerafejl', err);
         setStatus(describeError(err), true);
         startBtn.disabled = false;
       }
+    }
+
+    function scanLoop(now) {
+      requestAnimationFrame(scanLoop);
+      if (now - lastScanTime < SCAN_INTERVAL_MS) return;
+      if (video.readyState < video.HAVE_ENOUGH_DATA || !video.videoWidth) return;
+      lastScanTime = now;
+
+      const scale = Math.min(1, MAX_SCAN_SIZE / Math.max(video.videoWidth, video.videoHeight));
+      const w = Math.round(video.videoWidth * scale);
+      const h = Math.round(video.videoHeight * scale);
+      if (scanCanvas.width !== w || scanCanvas.height !== h) {
+        scanCanvas.width = w;
+        scanCanvas.height = h;
+      }
+      scanCtx.drawImage(video, 0, 0, w, h);
+      const imageData = scanCtx.getImageData(0, 0, w, h);
+
+      // "dontInvert": kun almindelige sorte-på-hvide koder — ifølge jsQR's README ~50% hurtigere
+      const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+
+      drawOutline(code ? code.location : null, w, h);
+      if (code && code.data) showResult(code.data);
+    }
+
+    // Tegn en grøn ramme om QR-koden. Videoen vises med object-fit: cover, så
+    // koordinaterne skal skaleres og forskydes på samme måde som billedet beskæres.
+    function drawOutline(loc, srcW, srcH) {
+      const boxW = overlay.clientWidth;
+      const boxH = overlay.clientHeight;
+      if (overlay.width !== boxW || overlay.height !== boxH) {
+        overlay.width = boxW;
+        overlay.height = boxH;
+      }
+      overlayCtx.clearRect(0, 0, boxW, boxH);
+      if (!loc) return;
+
+      const s = Math.max(boxW / srcW, boxH / srcH);
+      const dx = (boxW - srcW * s) / 2;
+      const dy = (boxH - srcH * s) / 2;
+      const pts = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner];
+
+      overlayCtx.beginPath();
+      pts.forEach((p, i) => {
+        const x = p.x * s + dx;
+        const y = p.y * s + dy;
+        if (i === 0) overlayCtx.moveTo(x, y); else overlayCtx.lineTo(x, y);
+      });
+      overlayCtx.closePath();
+      overlayCtx.lineWidth = 4;
+      overlayCtx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--success');
+      overlayCtx.stroke();
+    }
+
+    function showResult(text) {
+      if (text === lastResult) return;   // samme kode som før — undgå gentagne opdateringer/vibrationer
+      lastResult = text;
+
+      resultText.textContent = text;     // textContent, så indholdet aldrig tolkes som HTML
+      resultEl.style.display = 'block';
+      resultEl.classList.add('found');
+      setStatus('QR-kode fundet!');
+      if (navigator.vibrate) navigator.vibrate(100);
+      console.log('[QR-scanner] QR-kode afkodet:', text);
     }
 
     startBtn.addEventListener('click', startCamera);
