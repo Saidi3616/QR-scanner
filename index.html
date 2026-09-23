@@ -3,178 +3,479 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
   <title>QR-scanner</title>
   <!-- tomt favicon, så browseren ikke logger en 404 i konsollen -->
   <link rel="icon" href="data:,">
   <style>
     :root {
-      --bg: #111;
-      --fg: #eee;
-      --muted: #999;
-      --accent: #2e8bff;
-      --error: #ff6b6b;
-      --success: #3ddc84;
+      --bg: #000;
+      --fg: #fff;
+      --fg-2: rgba(255, 255, 255, 0.64);
+      --fg-3: rgba(255, 255, 255, 0.42);
+      --accent: #10B981;
+      /* Hvid tekst på #10B981 har kun kontrast 2,5:1 — derfor mørk tekst på grønne knapper (≈8:1) */
+      --on-accent: #03140e;
+      --error: #EF4444;
+      --glass: rgba(30, 30, 32, 0.55);
+      --glass-strong: rgba(24, 24, 26, 0.92);
+      --hairline: rgba(255, 255, 255, 0.1);
+      --dim: rgba(0, 0, 0, 0.6);
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+      --t: 260ms;
+      --frame-size: min(70vw, 58vh, 420px);
+      --frame-radius: 22px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
       margin: 0;
       height: 100%;
+      overflow: hidden;
       background: var(--bg);
       color: var(--fg);
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 16px;
-      gap: 16px;
+    button { font: inherit; color: inherit; }
+    svg.icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+    /* Frosted glass: -webkit- prefiks kræves af iOS Safari før version 18 */
+    .glass {
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      backdrop-filter: blur(20px) saturate(160%);
     }
-    h1 { margin: 0; font-size: 1.4rem; }
-    #camera-box {
-      position: relative;
-      width: 100%;
-      max-width: 480px;
-      aspect-ratio: 3 / 4;
-      background: #000;
-      border-radius: 12px;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: none;
-    }
-    /* Overlay-lærred oven på videoen, hvor den fundne QR-kode markeres */
-    #overlay {
-      position: absolute;
+
+    /* --- Kamera i fuld skærm --- */
+    #video {
+      position: fixed;
       inset: 0;
       width: 100%;
       height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 400ms var(--ease-out);
+    }
+    body.camera-on #video { opacity: 1; }
+
+    /* --- Scanningsfelt: box-shadow'et dæmper alt udenfor feltet --- */
+    #frame {
+      position: fixed;
+      width: var(--frame-size);
+      height: var(--frame-size);
+      left: calc(50% - var(--frame-size) / 2);
+      top: calc(50% - var(--frame-size) / 2 - 3vh);
+      border-radius: var(--frame-radius);
+      box-shadow: 0 0 0 200vmax var(--dim);
       pointer-events: none;
+      opacity: 0;
+      --corner: #fff;
+      transition:
+        left var(--t) var(--ease-out), top var(--t) var(--ease-out),
+        width var(--t) var(--ease-out), height var(--t) var(--ease-out),
+        opacity 400ms var(--ease-out);
     }
-    #placeholder { color: var(--muted); padding: 16px; text-align: center; }
-    #result {
-      width: 100%;
-      max-width: 480px;
-      padding: 12px 16px;
-      border-radius: 8px;
-      background: #1e1e1e;
-      border: 2px solid #333;
-      display: none;
+    body.camera-on #frame { opacity: 1; }
+    .corner {
+      position: absolute;
+      width: 38px;
+      height: 38px;
+      border: 0 solid var(--corner);
+      transition: border-color var(--t) var(--ease-out);
     }
-    #result.found { border-color: var(--success); }
-    #result-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
-    #result-text {
-      font-size: 1.05rem;
-      word-break: break-word;
-      white-space: pre-wrap;
+    .corner.tl { top: 0; left: 0; border-top-width: 4px; border-left-width: 4px; border-top-left-radius: var(--frame-radius); }
+    .corner.tr { top: 0; right: 0; border-top-width: 4px; border-right-width: 4px; border-top-right-radius: var(--frame-radius); }
+    .corner.bl { bottom: 0; left: 0; border-bottom-width: 4px; border-left-width: 4px; border-bottom-left-radius: var(--frame-radius); }
+    .corner.br { bottom: 0; right: 0; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: var(--frame-radius); }
+
+    #scan-line-track {
+      position: absolute;
+      inset: 14px;
+      overflow: hidden;
+      transition: opacity var(--t) var(--ease-out);
     }
-    #result-text a, .history-content a {
-      color: var(--accent);
-      text-decoration: underline;
+    #scan-line {
+      position: absolute;
+      left: 6%;
+      right: 6%;
+      top: 0;
+      height: 2px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent) 20%, #a7f3d0 50%, var(--accent) 80%, transparent);
+      box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.55);
+      opacity: 0.85;
+      animation: scan 2.6s ease-in-out infinite alternate;
     }
-    #history { width: 100%; max-width: 480px; }
-    #history-header {
+    @keyframes scan { from { top: 0; } to { top: calc(100% - 2px); } }
+
+    #frame.found { --corner: var(--accent); }
+    #frame.found #scan-line-track,
+    #frame.error #scan-line-track { opacity: 0; }
+    #frame.error { --corner: var(--error); }
+    #frame.error .corner { animation: soft-blink 700ms var(--ease-out); }
+    @keyframes soft-blink { 0%, 100% { opacity: 1; } 35% { opacity: 0.35; } 70% { opacity: 1; } }
+
+    /* --- Instruktions-pille øverst --- */
+    #pill {
+      position: fixed;
+      top: calc(var(--safe-top) + 18px);
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: calc(100% - 32px);
       display: flex;
       align-items: center;
+      gap: 8px;
+      padding: 11px 18px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: opacity 200ms var(--ease-out);
+    }
+    #pill.fading { opacity: 0; }
+    #pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error); flex: none; display: none; }
+    #pill.is-error .dot { display: block; }
+    body.no-camera #pill:not(.is-error),
+    body.result-open #pill { opacity: 0; }
+
+    /* --- Ikonknapper nederst --- */
+    #controls {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(var(--safe-bottom) + 34px);
+      display: flex;
       justify-content: space-between;
+      align-items: center;
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 0 40px;
+      transition: opacity var(--t) var(--ease-out);
+    }
+    body.no-camera #controls { display: none; }
+    .round-btn {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: 1px solid var(--hairline);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: background-color var(--t) var(--ease-out), color var(--t) var(--ease-out), transform 150ms var(--ease-out), opacity var(--t) var(--ease-out);
+    }
+    .round-btn:active { transform: scale(0.94); }
+    .round-btn.small { width: 48px; height: 48px; }
+    .round-btn.unsupported { opacity: 0.4; }
+    #torch-btn[aria-pressed="true"] { background: #fff; color: #000; }
+
+    #version {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(var(--safe-bottom) + 8px);
+      text-align: center;
+      font-size: 10px;
+      color: var(--fg-3);
+      pointer-events: none;
+    }
+
+    /* --- Bottom sheets (resultat + historik) --- */
+    .sheet {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-width: 540px;
+      margin: 0 auto;
+      padding: 10px 20px calc(var(--safe-bottom) + 20px);
+      border-radius: 26px 26px 0 0;
+      background: var(--glass-strong);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      backdrop-filter: blur(24px) saturate(160%);
+      border-top: 1px solid var(--hairline);
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.4);
+      transform: translateY(calc(100% + 20px));
+      transition: transform 300ms var(--ease-out);
+      z-index: 10;
+    }
+    .sheet.open { transform: translateY(0); }
+    .grabber { width: 38px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.22); margin: 0 auto 16px; }
+
+    .overline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
       margin-bottom: 8px;
     }
-    #history-header h2 { margin: 0; font-size: 1.1rem; }
-    #clear-history-btn {
-      padding: 6px 12px;
-      font-size: 0.85rem;
-      background: transparent;
-      border: 1px solid #555;
-      color: var(--muted);
+    .overline svg.icon { width: 16px; height: 16px; }
+    #result-title {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      word-break: break-word;
+      white-space: pre-wrap;
+      max-height: 32vh;
+      overflow-y: auto;
     }
-    #history-empty { color: var(--muted); font-size: 0.9rem; }
-    #history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-    .history-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 10px 12px;
-      background: #1e1e1e;
-      border-radius: 8px;
+    #result-sub {
+      margin-top: 6px;
+      font-size: 14px;
+      color: var(--fg-2);
+      word-break: break-all;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
-    .history-body { flex: 1; min-width: 0; }
-    .history-content { word-break: break-word; white-space: pre-wrap; }
-    .history-time { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
-    .history-delete {
-      padding: 2px 8px;
-      font-size: 1.1rem;
-      line-height: 1;
-      background: transparent;
-      color: var(--muted);
-    }
-    button {
-      font-size: 1rem;
-      padding: 12px 24px;
+    #result-sub:empty { display: none; }
+
+    .actions { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
+    .actions-row { display: flex; gap: 10px; }
+    .actions-row > * { flex: 1; }
+    .btn {
+      min-height: 52px;
+      padding: 0 18px;
+      border-radius: 16px;
       border: none;
-      border-radius: 8px;
-      background: var(--accent);
-      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: background-color var(--t) var(--ease-out), transform 150ms var(--ease-out), opacity var(--t) var(--ease-out);
+    }
+    .btn:active { transform: scale(0.98); }
+    .actions-row .btn { white-space: nowrap; padding: 0 12px; }
+    .btn svg.icon { width: 20px; height: 20px; }
+    .btn.primary { background: var(--accent); color: var(--on-accent); }
+    .btn.secondary { background: rgba(255, 255, 255, 0.1); color: var(--fg); }
+    .btn[hidden] { display: none; }
+
+    /* Historik-sheet */
+    #history-sheet { max-height: 80vh; max-height: 80dvh; display: flex; flex-direction: column; }
+    .sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .sheet-header h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+    .sheet-header .header-actions { display: flex; align-items: center; gap: 4px; }
+    .text-btn {
+      min-height: 44px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--fg-2);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color var(--t) var(--ease-out), background-color var(--t) var(--ease-out);
+    }
+    .text-btn.confirm { color: var(--error); background: rgba(239, 68, 68, 0.12); }
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      display: grid;
+      place-items: center;
       cursor: pointer;
     }
-    button:disabled { opacity: 0.5; cursor: default; }
-    #status { min-height: 1.5em; text-align: center; max-width: 480px; }
-    #status.error { color: var(--error); }
-    #version { margin-top: auto; font-size: 0.75rem; color: var(--muted); }
+    .icon-btn svg.icon { width: 20px; height: 20px; }
+    #history-empty { color: var(--fg-2); font-size: 15px; padding: 24px 0 8px; text-align: center; }
+    #history-list {
+      list-style: none;
+      margin: 0 -20px;
+      padding: 0 20px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--hairline);
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-kind {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      display: grid;
+      place-items: center;
+      color: var(--fg-2);
+      flex: none;
+    }
+    .history-kind svg.icon { width: 18px; height: 18px; }
+    .history-body { flex: 1; min-width: 0; }
+    .history-content {
+      font-size: 16px;
+      word-break: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .history-content a { color: var(--accent); text-decoration: none; }
+    .history-time { font-size: 13px; color: var(--fg-3); margin-top: 2px; }
+    .history-delete { background: transparent; color: var(--fg-3); }
+
+    /* --- Tomt-skærmbillede (ingen kameraadgang) --- */
+    #empty-state {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: calc(var(--safe-top) + 24px) 32px calc(var(--safe-bottom) + 24px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 300ms var(--ease-out);
+    }
+    body.no-camera #empty-state { opacity: 1; pointer-events: auto; }
+    .empty-icon {
+      width: 88px;
+      height: 88px;
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.08);
+      display: grid;
+      place-items: center;
+      margin-bottom: 28px;
+    }
+    .empty-icon svg.icon { width: 40px; height: 40px; stroke-width: 1.6; color: var(--fg-2); }
+    #empty-state h1 { margin: 0 0 10px; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+    #empty-text { margin: 0 0 32px; max-width: 320px; font-size: 16px; line-height: 1.45; color: var(--fg-2); }
+    #empty-state .btn { width: 100%; max-width: 320px; }
+    #empty-state .text-btn { margin-top: 12px; }
+
+    /* Små telefoner (fx iPhone SE): lidt mindre tekst og luft i kortet */
+    @media (max-width: 360px), (max-height: 640px) {
+      #result-title { font-size: 21px; }
+      .actions { margin-top: 18px; }
+      .btn { min-height: 48px; font-size: 15px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #scan-line { animation: none; top: 50%; }
+      * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
-  <h1>QR-scanner</h1>
+  <!-- Ikoner: Lucide (lucide.dev), ISC-licens -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-flash" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><line x1="6" x2="18" y1="6" y2="6"/><line x1="12" x2="12" y1="12" y2="12"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+    <symbol id="i-camera-off" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"/><path d="M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16"/><path d="M9.5 4h5L17 7h3a2 2 0 0 1 2 2v7.5"/><path d="M14.121 15.121A3 3 0 1 1 9.88 10.88"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  </svg>
 
-  <div id="camera-box">
-    <!-- playsinline + muted: kræves af iOS Safari for at afspille inline uden fuldskærm -->
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="overlay"></canvas>
-    <div id="placeholder">Kameraet er ikke startet endnu.</div>
+  <!-- playsinline + muted: kræves af iOS Safari for at afspille inline uden fuldskærm -->
+  <video id="video" autoplay playsinline muted></video>
+
+  <div id="frame" aria-hidden="true">
+    <div id="scan-line-track"><div id="scan-line"></div></div>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
   </div>
 
-  <button id="start-btn">Start kamera</button>
-  <div id="status"></div>
+  <div id="pill" class="glass" role="status" aria-live="polite"><span class="dot"></span><span id="pill-text">Starter kamera…</span></div>
 
-  <div id="result">
-    <div id="result-label">Afkodet tekst:</div>
-    <div id="result-text"></div>
+  <div id="controls">
+    <button id="torch-btn" class="round-btn glass" aria-label="Lommelygte" aria-pressed="false">
+      <svg class="icon"><use href="#i-flash"/></svg>
+    </button>
+    <button id="history-btn" class="round-btn small glass" aria-label="Historik">
+      <svg class="icon"><use href="#i-history"/></svg>
+    </button>
+    <button id="gallery-btn" class="round-btn glass" aria-label="Vælg billede fra galleri">
+      <svg class="icon"><use href="#i-image"/></svg>
+    </button>
+  </div>
+  <input id="file-input" type="file" accept="image/*" hidden>
+
+  <div id="version"></div>
+
+  <!-- Tomt-skærmbillede når kameraet ikke kan bruges -->
+  <div id="empty-state">
+    <div class="empty-icon"><svg class="icon"><use href="#i-camera-off"/></svg></div>
+    <h1 id="empty-title">Kameraadgang</h1>
+    <p id="empty-text">Giv adgang til kameraet for at scanne QR-koder. Billedet forlader aldrig din enhed.</p>
+    <button id="permission-btn" class="btn primary">Giv adgang til kamera</button>
+    <button id="empty-gallery-btn" class="text-btn">Vælg billede i stedet</button>
   </div>
 
-  <section id="history">
-    <div id="history-header">
-      <h2>Historik <span id="history-count"></span></h2>
-      <button id="clear-history-btn">Ryd historik</button>
+  <!-- Resultatkort -->
+  <section id="result-sheet" class="sheet" aria-label="Resultat" inert>
+    <div class="grabber"></div>
+    <div class="overline"><svg class="icon"><use id="result-kind-icon" href="#i-link"/></svg><span id="result-kind">Link</span></div>
+    <h2 id="result-title"></h2>
+    <div id="result-sub"></div>
+    <div class="actions">
+      <button id="open-btn" class="btn primary"><svg class="icon"><use href="#i-external"/></svg>Åbn</button>
+      <div class="actions-row">
+        <button id="copy-btn" class="btn secondary"><svg class="icon"><use id="copy-icon" href="#i-copy"/></svg><span id="copy-label">Kopiér</span></button>
+        <button id="rescan-btn" class="btn secondary"><svg class="icon"><use href="#i-scan"/></svg>Scan igen</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Historik -->
+  <section id="history-sheet" class="sheet" aria-label="Historik" inert>
+    <div class="grabber"></div>
+    <div class="sheet-header">
+      <h2>Historik</h2>
+      <div class="header-actions">
+        <button id="clear-history-btn" class="text-btn">Ryd</button>
+        <button id="close-history-btn" class="icon-btn" aria-label="Luk"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
     </div>
     <div id="history-empty">Ingen scannede koder endnu.</div>
     <ul id="history-list"></ul>
   </section>
 
-  <div id="version"></div>
-
   <!-- jsQR 1.4.0 (Apache-2.0), lokal kopi — se lib/jsQR.LICENSE -->
   <script src="lib/jsQR.js"></script>
   <script>
     // Opdateres ved hver push, så man kan se om man har den nyeste version
-    const APP_VERSION = 'v0.4 · trin 4 (historik)';
+    const APP_VERSION = 'v0.5 · trin 5 (design)';
 
-    const video = document.getElementById('video');
-    const overlay = document.getElementById('overlay');
-    const placeholder = document.getElementById('placeholder');
-    const startBtn = document.getElementById('start-btn');
-    const statusEl = document.getElementById('status');
-    const resultEl = document.getElementById('result');
-    const resultText = document.getElementById('result-text');
-    const resultLabel = document.getElementById('result-label');
-    const historyList = document.getElementById('history-list');
-    const historyEmpty = document.getElementById('history-empty');
-    const historyCount = document.getElementById('history-count');
-    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    const $ = id => document.getElementById(id);
+    const video = $('video');
+    const frame = $('frame');
+    const pill = $('pill');
+    const pillText = $('pill-text');
+    const torchBtn = $('torch-btn');
+    const fileInput = $('file-input');
+    const resultSheet = $('result-sheet');
+    const historySheet = $('history-sheet');
+    const historyList = $('history-list');
+    const historyEmpty = $('history-empty');
+    const clearHistoryBtn = $('clear-history-btn');
 
     // localStorage deles af ALLE sider på saidi3616.github.io, så nøglen får et
     // app-specifikt præfiks for ikke at kollidere med fx Koran-appen.
@@ -184,19 +485,38 @@
     // Skjult lærred som kamerabilledet tegnes på, så pixels kan gives til jsQR
     const scanCanvas = document.createElement('canvas');
     const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
-    const overlayCtx = overlay.getContext('2d');
 
     const SCAN_INTERVAL_MS = 150;   // højst ~6-7 scanninger i sekundet, sparer batteri
     const MAX_SCAN_SIZE = 800;      // nedskalér store billeder — hurtigere, stadig skarpt nok
+    const INSTRUCTION = 'Ret kameraet mod en QR-kode';
     let lastScanTime = 0;
     let lastResult = null;
+    let missCount = 0;              // antal scanninger i træk uden kode (bruges efter "Scan igen")
+    let paused = false;             // scanning sat på pause mens et kort er åbent
+    let scanLoopStarted = false;
+    let videoTrack = null;
+    let torchOn = false;
+    let currentText = '';
+    let deniedOnce = false;
+    let lastErrorTime = 0;
 
-    document.getElementById('version').textContent = APP_VERSION;
+    $('version').textContent = APP_VERSION;
     console.log('[QR-scanner]', APP_VERSION);
 
-    function setStatus(text, isError = false) {
-      statusEl.textContent = text;
-      statusEl.classList.toggle('error', isError);
+    // --- Pille / diskrete beskeder ---
+    let pillTimer = null;
+    function setPill(text, isError = false) {
+      pill.classList.add('fading');
+      setTimeout(() => {
+        pillText.textContent = text;
+        pill.classList.toggle('is-error', isError);
+        pill.classList.remove('fading');
+      }, 200);
+    }
+    function flashMessage(text, isError = true, ms = 2600) {
+      clearTimeout(pillTimer);
+      setPill(text, isError);
+      pillTimer = setTimeout(() => setPill(INSTRUCTION), ms);
     }
 
     // Oversæt de fejl getUserMedia kan kaste til en forståelig besked
@@ -217,15 +537,23 @@
       }
     }
 
+    function showEmptyState(title, text, buttonLabel) {
+      $('empty-title').textContent = title;
+      $('empty-text').textContent = text;
+      $('permission-btn').textContent = buttonLabel;
+      document.body.classList.remove('camera-on');
+      document.body.classList.add('no-camera');
+    }
+
     async function startCamera() {
       // navigator.mediaDevices findes kun i en "secure context" (https eller localhost)
       if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setStatus('Kameraet kræver at siden åbnes via https (det live link), ikke som lokal fil.', true);
+        showEmptyState('Kræver sikker forbindelse', 'Kameraet kræver at siden åbnes via https (det live link), ikke som lokal fil.', 'Prøv igen');
         return;
       }
 
-      startBtn.disabled = true;
-      setStatus('Beder om adgang til kameraet…');
+      document.body.classList.remove('no-camera');
+      setPill('Starter kamera…');
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -237,24 +565,35 @@
         video.srcObject = stream;
         await video.play();
 
-        video.style.display = 'block';
-        placeholder.style.display = 'none';
-        startBtn.style.display = 'none';
+        videoTrack = stream.getVideoTracks()[0];
+        setupTorch();
+        document.body.classList.add('camera-on');
+        setPill(INSTRUCTION);
+        console.log('[QR-scanner] Kamera startet', videoTrack.getSettings());
 
-        const settings = stream.getVideoTracks()[0].getSettings();
-        setStatus('Peg kameraet mod en QR-kode…');
-        console.log('[QR-scanner] Kamera startet', settings);
-
-        requestAnimationFrame(scanLoop);
+        if (!scanLoopStarted) {
+          scanLoopStarted = true;
+          requestAnimationFrame(scanLoop);
+        }
       } catch (err) {
         console.error('[QR-scanner] Kamerafejl', err);
-        setStatus(describeError(err), true);
-        startBtn.disabled = false;
+        if (err.name === 'NotAllowedError') {
+          // Anden afvisning i træk betyder typisk at browseren har blokeret siden permanent
+          showEmptyState('Kameraadgang',
+            deniedOnce
+              ? 'Kameraet er blokeret for denne side. Tryk på ikonet ved adresselinjen (eller Indstillinger › Safari › Kamera på iPhone), tillad kamera og prøv igen.'
+              : 'Giv adgang til kameraet for at scanne QR-koder. Billedet forlader aldrig din enhed.',
+            'Giv adgang til kamera');
+          deniedOnce = true;
+        } else {
+          showEmptyState('Kameraet kunne ikke startes', describeError(err), 'Prøv igen');
+        }
       }
     }
 
     function scanLoop(now) {
       requestAnimationFrame(scanLoop);
+      if (paused) return;
       if (now - lastScanTime < SCAN_INTERVAL_MS) return;
       if (video.readyState < video.HAVE_ENOUGH_DATA || !video.videoWidth) return;
       lastScanTime = now;
@@ -272,50 +611,223 @@
       // "dontInvert": kun almindelige sorte-på-hvide koder — ifølge jsQR's README ~50% hurtigere
       const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
 
-      drawOutline(code ? code.location : null, w, h);
-      if (code && code.data) showResult(code.data);
+      if (!code) {
+        // Efter "Scan igen" skal samme kode først ud af billedet (~0,75 s) før den tæller igen
+        if (++missCount > 5) lastResult = null;
+        return;
+      }
+      missCount = 0;
+      if (!code.data) {
+        // Koden blev fundet, men indholdet kunne ikke tolkes som tekst
+        if (now - lastErrorTime > 3000) {
+          lastErrorTime = now;
+          showError('QR-koden kunne ikke læses');
+        }
+        return;
+      }
+      if (code.data === lastResult) return;
+      showResult(code.data, codeRectOnScreen(code.location, w, h));
     }
 
-    // Tegn en grøn ramme om QR-koden. Videoen vises med object-fit: cover, så
-    // koordinaterne skal skaleres og forskydes på samme måde som billedet beskæres.
-    function drawOutline(loc, srcW, srcH) {
-      const boxW = overlay.clientWidth;
-      const boxH = overlay.clientHeight;
-      if (overlay.width !== boxW || overlay.height !== boxH) {
-        overlay.width = boxW;
-        overlay.height = boxH;
-      }
-      overlayCtx.clearRect(0, 0, boxW, boxH);
-      if (!loc) return;
-
+    // Omregn kodens hjørner fra scan-lærredet til skærmkoordinater. Videoen vises med
+    // object-fit: cover, så der skaleres og forskydes på samme måde som billedet beskæres.
+    function codeRectOnScreen(loc, srcW, srcH) {
+      const boxW = video.clientWidth;
+      const boxH = video.clientHeight;
       const s = Math.max(boxW / srcW, boxH / srcH);
       const dx = (boxW - srcW * s) / 2;
       const dy = (boxH - srcH * s) / 2;
-      const pts = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner];
-
-      overlayCtx.beginPath();
-      pts.forEach((p, i) => {
-        const x = p.x * s + dx;
-        const y = p.y * s + dy;
-        if (i === 0) overlayCtx.moveTo(x, y); else overlayCtx.lineTo(x, y);
-      });
-      overlayCtx.closePath();
-      overlayCtx.lineWidth = 4;
-      overlayCtx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--success');
-      overlayCtx.stroke();
+      const pts = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner]
+        .map(p => ({ x: p.x * s + dx, y: p.y * s + dy }));
+      const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x));
+      const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y));
+      const size = Math.max(140, Math.max(maxX - minX, maxY - minY) + 44);
+      return { x: (minX + maxX) / 2 - size / 2, y: (minY + maxY) / 2 - size / 2, size };
     }
 
-    function showResult(text) {
-      if (text === lastResult) return;   // samme kode som før — undgå gentagne opdateringer/vibrationer
-      lastResult = text;
+    // Hjørnerne glider ind om koden. Uden position (fx billede fra galleri) trækker
+    // feltet sig blot lidt sammen om midten.
+    function snapFrame(rect) {
+      const r = frame.getBoundingClientRect();
+      // Feltet må kun trække sig sammen, aldrig vokse — er koden større end feltet
+      // (holdt tæt på), bliver den lidt mindre end standardfeltet om kodens midte.
+      const maxSize = r.width * 0.9;
+      const size = rect ? Math.min(rect.size, maxSize) : r.width * 0.86;
+      let cx = rect ? rect.x + rect.size / 2 : r.left + r.width / 2;
+      let cy = rect ? rect.y + rect.size / 2 : r.top + r.height / 2;
+      // Hold feltet inden for skærmen
+      const m = 12;
+      cx = Math.min(Math.max(cx, size / 2 + m), innerWidth - size / 2 - m);
+      cy = Math.min(Math.max(cy, size / 2 + m), innerHeight - size / 2 - m);
+      frame.style.left = (cx - size / 2) + 'px';
+      frame.style.top = (cy - size / 2) + 'px';
+      frame.style.width = size + 'px';
+      frame.style.height = size + 'px';
+    }
+    function resetFrame() {
+      frame.classList.remove('found', 'error');
+      frame.style.left = frame.style.top = frame.style.width = frame.style.height = '';
+    }
 
-      renderResult(text);
+    function showError(message) {
+      frame.classList.remove('error');
+      void frame.offsetWidth;          // genstart blink-animationen
+      frame.classList.add('error');
+      setTimeout(() => frame.classList.remove('error'), 800);
+      flashMessage(message);
+    }
+
+    function showResult(text, rect) {
+      lastResult = text;
+      paused = true;
+      clearTimeout(pillTimer);
+      frame.classList.remove('error');
+      frame.classList.add('found');
+      snapFrame(rect);
+      if (navigator.vibrate) navigator.vibrate(40);   // virker ikke i iOS Safari (ikke understøttet)
       addToHistory(text);
-      resultEl.style.display = 'block';
-      resultEl.classList.add('found');
-      setStatus('QR-kode fundet!');
-      if (navigator.vibrate) navigator.vibrate(100);
+      openResultSheet(text);
       console.log('[QR-scanner] QR-kode afkodet:', text);
+    }
+
+    // --- Resultatkort ---
+    function openSheet(sheet) {
+      sheet.inert = false;
+      sheet.classList.add('open');
+    }
+    function closeSheet(sheet) {
+      sheet.classList.remove('open');
+      sheet.inert = true;
+    }
+
+    function openResultSheet(text) {
+      currentText = text;
+      const url = toSafeUrl(text);
+      $('result-kind').textContent = url ? 'Link' : 'Tekst';
+      $('result-kind-icon').setAttribute('href', url ? '#i-link' : '#i-text');
+      if (url) {
+        // Stor overskrift = domænet, fuld adresse nedenunder (som den stod i koden)
+        $('result-title').textContent = new URL(url).hostname.replace(/^www\./, '');
+        $('result-sub').textContent = text.trim();
+      } else {
+        $('result-title').textContent = text;
+        $('result-sub').textContent = '';
+      }
+      $('open-btn').hidden = !url;
+      // Uden link er "Scan igen" den primære handling
+      $('rescan-btn').className = 'btn ' + (url ? 'secondary' : 'primary');
+      resetCopyButton();
+      closeSheet(historySheet);
+      openSheet(resultSheet);
+      document.body.classList.add('result-open');
+    }
+
+    function rescan() {
+      closeSheet(resultSheet);
+      document.body.classList.remove('result-open');
+      resetFrame();
+      setPill(INSTRUCTION);
+      missCount = 0;
+      // Kort pause, så overgangen når at køre før næste scanning
+      setTimeout(() => { paused = false; }, 300);
+    }
+
+    $('open-btn').addEventListener('click', () => {
+      const url = toSafeUrl(currentText);
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    });
+    $('rescan-btn').addEventListener('click', rescan);
+
+    let copyTimer = null;
+    function resetCopyButton() {
+      clearTimeout(copyTimer);
+      $('copy-label').textContent = 'Kopiér';
+      $('copy-icon').setAttribute('href', '#i-copy');
+    }
+    $('copy-btn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(currentText);
+      } catch {
+        // Reserveløsning hvis Clipboard API ikke er tilgængeligt
+        const ta = document.createElement('textarea');
+        ta.value = currentText;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      $('copy-label').textContent = 'Kopieret';
+      $('copy-icon').setAttribute('href', '#i-check');
+      copyTimer = setTimeout(resetCopyButton, 1800);
+    });
+
+    // --- Lommelygte ---
+    // Ifølge W3C Image Capture-specifikationen er capabilities.torch en liste
+    // ([true, false] når den kan styres); ældre Chrome-versioner returnerer blot true.
+    function setupTorch() {
+      const caps = videoTrack && videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+      const supported = caps.torch === true || (Array.isArray(caps.torch) && caps.torch.includes(true));
+      torchBtn.classList.toggle('unsupported', !supported);
+      torchBtn.dataset.supported = supported ? '1' : '';
+      torchOn = false;
+      torchBtn.setAttribute('aria-pressed', 'false');
+    }
+    torchBtn.addEventListener('click', async () => {
+      if (!torchBtn.dataset.supported) {
+        flashMessage('Lommelygte understøttes ikke her', false);
+        return;
+      }
+      try {
+        await videoTrack.applyConstraints({ advanced: [{ torch: !torchOn }] });
+        torchOn = !torchOn;
+        torchBtn.setAttribute('aria-pressed', String(torchOn));
+      } catch (err) {
+        console.error('[QR-scanner] Lommelygte-fejl', err);
+        flashMessage('Lommelygten kunne ikke tændes');
+      }
+    });
+
+    // --- Billede fra galleri ---
+    const openGallery = () => fileInput.click();
+    $('gallery-btn').addEventListener('click', openGallery);
+    $('empty-gallery-btn').addEventListener('click', openGallery);
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      fileInput.value = '';            // så samme billede kan vælges igen
+      if (!file) return;
+      try {
+        const bitmap = await createImageBitmap(file);
+        const text = decodeImage(bitmap);
+        bitmap.close && bitmap.close();
+        if (text) {
+          showResult(text, null);
+        } else {
+          showError('Ingen QR-kode fundet i billedet');
+        }
+      } catch (err) {
+        console.error('[QR-scanner] Kunne ikke læse billedet', err);
+        showError('Billedet kunne ikke åbnes');
+      }
+    });
+
+    // Prøv et par størrelser — store fotos afkodes ofte bedre nedskaleret
+    function decodeImage(bitmap) {
+      for (const max of [1200, 800, 1800]) {
+        const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+        const w = Math.round(bitmap.width * scale);
+        const h = Math.round(bitmap.height * scale);
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        const code = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'attemptBoth' });
+        if (code && code.data) return code.data;
+      }
+      return null;
     }
 
     // Returnerer en sikker http(s)-adresse hvis HELE indholdet er et link, ellers null.
@@ -347,11 +859,6 @@
       return a;
     }
 
-    function renderResult(text) {
-      resultLabel.textContent = toSafeUrl(text) ? 'Link (åbner i ny fane):' : 'Tekst:';
-      resultText.replaceChildren(createContentNode(text));
-    }
-
     // --- Historik (localStorage) ---
     // Adgang til localStorage kan kaste fejl (fx blokeret af browserindstillinger eller
     // fuld lagerplads), så al læsning/skrivning er pakket ind i try/catch.
@@ -371,7 +878,7 @@
         localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
       } catch (err) {
         console.warn('[QR-scanner] Kunne ikke gemme historik', err);
-        setStatus('Historikken kunne ikke gemmes i denne browser.', true);
+        flashMessage('Historikken kunne ikke gemmes');
       }
     }
 
@@ -393,16 +900,28 @@
       return new Date(ms).toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' });
     }
 
+    function icon(id) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'icon');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', '#' + id);
+      svg.appendChild(use);
+      return svg;
+    }
+
     function renderHistory() {
       const history = loadHistory();
       historyList.replaceChildren();
       historyEmpty.style.display = history.length ? 'none' : 'block';
-      clearHistoryBtn.style.display = history.length ? 'inline-block' : 'none';
-      historyCount.textContent = history.length ? '(' + history.length + ')' : '';
+      clearHistoryBtn.style.visibility = history.length ? 'visible' : 'hidden';
 
       for (const entry of history) {
         const li = document.createElement('li');
         li.className = 'history-item';
+
+        const kind = document.createElement('div');
+        kind.className = 'history-kind';
+        kind.appendChild(icon(toSafeUrl(entry.text) ? 'i-link' : 'i-text'));
 
         const body = document.createElement('div');
         body.className = 'history-body';
@@ -415,26 +934,54 @@
         body.append(content, time);
 
         const del = document.createElement('button');
-        del.className = 'history-delete';
-        del.textContent = '×';
-        del.title = 'Slet';
+        del.className = 'icon-btn history-delete';
         del.setAttribute('aria-label', 'Slet fra historik');
+        del.appendChild(icon('i-x'));
         del.addEventListener('click', () => deleteFromHistory(entry.time));
 
-        li.append(body, del);
+        li.append(kind, body, del);
         historyList.appendChild(li);
       }
     }
 
+    // "Ryd" kræver to tryk i stedet for en pop-up-bekræftelse
+    let clearArmed = false, clearTimer = null;
+    function disarmClear() {
+      clearArmed = false;
+      clearHistoryBtn.textContent = 'Ryd';
+      clearHistoryBtn.classList.remove('confirm');
+    }
     clearHistoryBtn.addEventListener('click', () => {
-      if (!confirm('Slet hele historikken?')) return;
+      if (!clearArmed) {
+        clearArmed = true;
+        clearHistoryBtn.textContent = 'Tryk igen for at rydde';
+        clearHistoryBtn.classList.add('confirm');
+        clearTimer = setTimeout(disarmClear, 3000);
+        return;
+      }
+      clearTimeout(clearTimer);
+      disarmClear();
       saveHistory([]);
       lastResult = null;   // så den senest scannede kode kan tilføjes igen
       renderHistory();
     });
 
+    $('history-btn').addEventListener('click', () => {
+      paused = true;
+      disarmClear();
+      renderHistory();
+      openSheet(historySheet);
+    });
+    $('close-history-btn').addEventListener('click', () => {
+      closeSheet(historySheet);
+      if (!resultSheet.classList.contains('open')) setTimeout(() => { paused = false; }, 300);
+    });
+
+    $('permission-btn').addEventListener('click', startCamera);
+
     renderHistory();
-    startBtn.addEventListener('click', startCamera);
+    // Start kameraet med det samme, som i en kamera-app. Afviser man, vises tomt-skærmbilledet.
+    startCamera();
   </script>
 </body>
 </html>
