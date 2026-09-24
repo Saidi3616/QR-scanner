@@ -150,8 +150,7 @@
     #pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error); flex: none; display: none; }
     #pill.is-error .dot { display: block; }
     body.no-camera #pill:not(.is-error),
-    body.result-open #pill,
-    body.create-open #pill { opacity: 0; }
+    body.sheet-open #pill { opacity: 0; }
 
     /* --- Ikonknapper nederst --- */
     #controls {
@@ -457,6 +456,17 @@
     .history-content a { color: var(--accent); text-decoration: none; }
     .history-time { font-size: 13px; color: var(--fg-3); margin-top: 2px; }
     .history-delete { background: transparent; color: var(--fg-3); }
+    #privacy-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--fg-3);
+      text-decoration: none;
+      flex: none;
+    }
 
     /* --- Tomt-skærmbillede (ingen kameraadgang) --- */
     #empty-state {
@@ -589,6 +599,7 @@
     </div>
     <div id="history-empty">Ingen scannede koder endnu.</div>
     <ul id="history-list"></ul>
+    <a id="privacy-link" href="privacy.html">Privatlivspolitik</a>
   </section>
 
   <!-- Opret QR-kode -->
@@ -621,7 +632,7 @@
   <script src="lib/qrcode-generator.js"></script>
   <script>
     // Opdateres ved hver push, så man kan se om man har den nyeste version
-    const APP_VERSION = 'v0.7 · trin 7 (PWA)';
+    const APP_VERSION = 'v0.8 · privatlivspolitik';
 
     const $ = id => document.getElementById(id);
     const video = $('video');
@@ -850,13 +861,19 @@
     }
 
     // --- Resultatkort ---
+    // body.sheet-open skjuler instruktions-pillen, så længe et kort er åbent
+    function syncSheetState() {
+      document.body.classList.toggle('sheet-open', !!document.querySelector('.sheet.open'));
+    }
     function openSheet(sheet) {
       sheet.inert = false;
       sheet.classList.add('open');
+      syncSheetState();
     }
     function closeSheet(sheet) {
       sheet.classList.remove('open');
       sheet.inert = true;
+      syncSheetState();
     }
 
     function openResultSheet(text) {
@@ -878,12 +895,10 @@
       resetCopyButton();
       closeSheet(historySheet);
       openSheet(resultSheet);
-      document.body.classList.add('result-open');
     }
 
     function rescan() {
       closeSheet(resultSheet);
-      document.body.classList.remove('result-open');
       resetFrame();
       setPill(INSTRUCTION);
       missCount = 0;

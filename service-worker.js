@@ -8,11 +8,12 @@
 //
 // CACHE_VERSION ændres når listen over filer ændres; gamle caches ryddes ved aktivering.
 
-const CACHE_VERSION = 'qr-scanner-v7';
+const CACHE_VERSION = 'qr-scanner-v8';
 
 const PRECACHE = [
   './',
   'index.html',
+  'privacy.html',
   'manifest.json',
   'lib/jsQR.js',
   'lib/qrcode-generator.js',
