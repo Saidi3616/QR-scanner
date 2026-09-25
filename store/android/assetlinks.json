@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.saidi3616.qrscanner",
+      "sha256_cert_fingerprints": [
+        "C0:B8:28:07:F9:83:EF:FC:C3:BE:6C:1A:31:11:BF:05:58:7F:90:24:0E:04:26:05:82:31:71:62:31:2C:92:F3"
+      ]
+    }
+  }
+]
