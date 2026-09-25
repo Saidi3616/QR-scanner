@@ -13,6 +13,15 @@ Vi bygger en QR-kode scanner app, trin for trin, ligesom vi gjorde med Koran-app
 2. Når noget ikke virker, giver jeg aldrig kun "det virker ikke" — jeg beskriver hvad jeg gjorde, hvad jeg forventede, hvad der skete (helst ordret/screenshot), hvilket link/enhed jeg testede på, og hvad der står i browserens konsol (F12).
 3. Jeg tester altid via et **live, hostet link** — aldrig en downloadet lokal fil — så vi undgår forældede versioner.
 4. Hvis du er i tvivl om hvordan et bibliotek eller en browser-funktion faktisk opfører sig, så **tjek kildekoden/dokumentationen først** i stedet for at gætte.
+5. Når du giver mig en opgave, du ikke selv kan udføre, så angiv altid **sværhedsgraden set fra en begynder** (1–5), ca. tid, og ⚠️ hvis noget ikke kan fortrydes — fx *"Sværhedsgrad 3/5 · ca. 15 min · ⚠️ kan ikke ændres bagefter"*. Alternative veje foreslås **kun når jeg selv beder om det**.
+
+   | Grad | Betyder |
+   |---|---|
+   | **1** Meget let | Få klik, intet teknisk |
+   | **2** Let | Følg en kort guide, udfyld nogle felter |
+   | **3** Middel | Flere trin og nye begreber — man kan fare vild, men fejl kan rettes |
+   | **4** Svær | Tekniske værktøjer/terminal — fejl kræver typisk hjælp |
+   | **5** Meget svær | Mange tekniske trin, fejl kan have varige følger |
 
 ## Trin 1 — Grundlæggende kamera-adgang
 
